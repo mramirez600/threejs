@@ -1,345 +1,258 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import GUI from 'lil-gui';
+import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import GUI from 'lil-gui'
 
 /**
  * Base
  */
 // Debug
-const gui = new GUI();
+const gui = new GUI()
 
 // Canvas
-const canvas = document.querySelector('canvas.webgl');
+const canvas = document.querySelector('canvas.webgl')
 
 // Scene
-const scene = new THREE.Scene();
-
-// fog
-const fog = new THREE.Fog('#262837', 1, 15);
-scene.fog = fog;
+const scene = new THREE.Scene()
 
 /**
- * Textures
+ * Objects
  */
-const textureLoader = new THREE.TextureLoader();
+const object1 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 16, 16),
+    new THREE.MeshBasicMaterial({ color: '#ff0000' })
+)
+object1.position.x = - 2
 
-const doorColorTexture = textureLoader.load('/textures/door/color.jpg');
-doorColorTexture.colorSpace = THREE.SRGBColorSpace;
+const object2 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 16, 16),
+    new THREE.MeshBasicMaterial({ color: '#ff0000' })
+)
 
-const doorAlphaTexture = textureLoader.load('/textures/door/alpha.jpg');
-const doorAmbientOcclusionTexture = textureLoader.load(
-  '/textures/door/ambientOcclusion.jpg'
-);
-const doorHeightTexture = textureLoader.load('/textures/door/height.jpg');
-const doorNormalTexture = textureLoader.load('/textures/door/normal.jpg');
-const doorMetalnessTexture = textureLoader.load('/textures/door/metalness.jpg');
-const doorRoughnessTexture = textureLoader.load('/textures/door/roughness.jpg');
+const object3 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 16, 16),
+    new THREE.MeshBasicMaterial({ color: '#ff0000' })
+)
+object3.position.x = 2
 
-const bricksColorTexture = textureLoader.load('/textures/bricks/color.jpg');
-bricksColorTexture.colorSpace = THREE.SRGBColorSpace;
-const bricksAmbientOcclusionTexture = textureLoader.load(
-  '/textures/bricks/ambientOcclusion.jpg'
-);
-const bricksNormalTexture = textureLoader.load('/textures/bricks/normal.jpg');
-const bricksRoughnessTexture = textureLoader.load(
-  '/textures/bricks/roughness.jpg'
-);
-
-const grassColorTexture = textureLoader.load('/textures/grass/color.jpg');
-grassColorTexture.colorSpace = THREE.SRGBColorSpace;
-const grassAmbientOcclusionTexture = textureLoader.load(
-  '/textures/grass/ambientOcclusion.jpg'
-);
-const grassNormalTexture = textureLoader.load('/textures/grass/normal.jpg');
-const grassRoughnessTexture = textureLoader.load(
-  '/textures/grass/roughness.jpg'
-);
-
-grassColorTexture.repeat.set(8, 8);
-grassAmbientOcclusionTexture.repeat.set(8, 8);
-grassNormalTexture.repeat.set(8, 8);
-grassRoughnessTexture.repeat.set(8, 8);
-
-grassColorTexture.wrapS = THREE.RepeatWrapping;
-grassAmbientOcclusionTexture.wrapS = THREE.RepeatWrapping;
-grassNormalTexture.wrapS = THREE.RepeatWrapping;
-grassRoughnessTexture.wrapS = THREE.RepeatWrapping;
-
-grassColorTexture.wrapT = THREE.RepeatWrapping;
-grassAmbientOcclusionTexture.wrapT = THREE.RepeatWrapping;
-grassNormalTexture.wrapT = THREE.RepeatWrapping;
-grassRoughnessTexture.wrapT = THREE.RepeatWrapping;
+scene.add(object1, object2, object3)
 
 /**
- * House
+ * Raycaster
  */
-const house = new THREE.Group();
-scene.add(house);
+const raycaster = new THREE.Raycaster()
+let currentIntersect = null
+const rayOrigin = new THREE.Vector3(- 3, 0, 0)
+const rayDirection = new THREE.Vector3(10, 0, 0)
+rayDirection.normalize()
 
-// walls
-const walls = new THREE.Mesh(
-  new THREE.BoxGeometry(4, 2.5, 4),
-  new THREE.MeshStandardMaterial({
-    map: bricksColorTexture,
-    aoMap: bricksAmbientOcclusionTexture,
-    normalMap: bricksNormalTexture,
-    roughnessMap: bricksRoughnessTexture,
-  })
-);
-
-walls.position.y = 1.25;
-
-house.add(walls);
-
-// roof
-const roof = new THREE.Mesh(
-  new THREE.ConeGeometry(3.5, 1, 4),
-  new THREE.MeshStandardMaterial({ color: '#b35f45' })
-);
-
-roof.position.y = 3;
-roof.rotation.y = Math.PI * 0.25;
-
-house.add(roof);
-
-// door
-const door = new THREE.Mesh(
-  new THREE.PlaneGeometry(2.2, 2.2, 100, 100),
-  new THREE.MeshStandardMaterial({
-    map: doorColorTexture,
-    transparent: textureLoader,
-    alphaMap: doorAlphaTexture,
-    aoMap: doorAmbientOcclusionTexture,
-    displacementMap: doorHeightTexture,
-    displacementScale: 0.1,
-    normalMap: doorNormalTexture,
-    metalnessMap: doorMetalnessTexture,
-    roughnessMap: doorRoughnessTexture,
-  })
-);
-
-door.position.z = 2 + 0.01;
-door.position.y = 1;
-
-house.add(door);
-
-// bushes
-const bushGeometry = new THREE.SphereGeometry(1, 16, 16);
-const bushMaterial = new THREE.MeshStandardMaterial({ color: '#89c854' });
-const bush1 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush1.scale.set(0.5, 0.5, 0.5);
-bush1.position.set(0.8, 0.2, 2.2);
-
-const bush2 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush2.scale.set(0.25, 0.25, 0.25);
-bush2.position.set(1.4, 0.1, 2.1);
-
-const bush3 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush3.scale.set(0.4, 0.4, 0.4);
-bush3.position.set(-0.8, 0.1, 2.2);
-
-const bush4 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush4.scale.set(0.15, 0.15, 0.15);
-bush4.position.set(-1, 0.05, 2.6);
-
-house.add(bush1, bush2, bush3, bush4);
-
-// graves
-const graves = new THREE.Group();
-scene.add(graves);
-
-const graveGeometery = new THREE.BoxGeometry(0.6, 0.8, 0.2);
-const graveMaterial = new THREE.MeshStandardMaterial({ color: '#b2b6b1' });
-
-for (let i = 0; i < 50; i++) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = 3 + Math.random() * 6;
-  const x = Math.sin(angle) * radius;
-  const z = Math.cos(angle) * radius;
-  const grave = new THREE.Mesh(graveGeometery, graveMaterial);
-  grave.castShadow = true;
-  grave.position.set(x, 0.4, z);
-  grave.rotation.y = (Math.random() - 0.5) * 0.4;
-  grave.rotation.z = (Math.random() - 0.5) * 0.3;
-
-  graves.add(grave);
-}
-// Floor
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(20, 20),
-  new THREE.MeshStandardMaterial({
-    map: grassColorTexture,
-    aoMap: grassAmbientOcclusionTexture,
-    normalMap: grassNormalTexture,
-    roughnessMap: grassRoughnessTexture,
-  })
-);
-floor.rotation.x = -Math.PI * 0.5;
-floor.position.y = 0;
-scene.add(floor);
-
-/**
- * Lights
- */
-// Ambient light
-const ambientLight = new THREE.AmbientLight('#b9d5ff', 0.12);
-gui.add(ambientLight, 'intensity').min(0).max(1).step(0.001);
-scene.add(ambientLight);
-
-// Directional light
-const moonLight = new THREE.DirectionalLight('#b9d5ff', 0.26);
-moonLight.position.set(4, 5, -2);
-gui.add(moonLight, 'intensity').min(0).max(1).step(0.001);
-gui.add(moonLight.position, 'x').min(-5).max(5).step(0.001);
-gui.add(moonLight.position, 'y').min(-5).max(5).step(0.001);
-gui.add(moonLight.position, 'z').min(-5).max(5).step(0.001);
-scene.add(moonLight);
-
-// door light
-const doorLight = new THREE.PointLight('#ff7d46', 3, 7);
-doorLight.position.set(0, 2.2, 2.7);
-house.add(doorLight);
-
-// ghosts
-const ghost1 = new THREE.PointLight('#ff00ff', 6, 3);
-scene.add(ghost1);
-
-const ghost2 = new THREE.PointLight('#00ffff', 6, 3);
-scene.add(ghost2);
-
-const ghost3 = new THREE.PointLight('#ffff00', 6, 3);
-scene.add(ghost3);
+// raycaster.set(rayOrigin, rayDirection)
 
 /**
  * Sizes
  */
 const sizes = {
-  width: window.innerWidth,
-  height: window.innerHeight,
-};
+    width: window.innerWidth,
+    height: window.innerHeight
+}
 
-window.addEventListener('resize', () => {
-  // Update sizes
-  sizes.width = window.innerWidth;
-  sizes.height = window.innerHeight;
+window.addEventListener('resize', () =>
+{
+    // Update sizes
+    sizes.width = window.innerWidth
+    sizes.height = window.innerHeight
 
-  // Update camera
-  camera.aspect = sizes.width / sizes.height;
-  camera.updateProjectionMatrix();
+    // Update camera
+    camera.aspect = sizes.width / sizes.height
+    camera.updateProjectionMatrix()
 
-  // Update renderer
-  renderer.setSize(sizes.width, sizes.height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-});
+    // Update renderer
+    renderer.setSize(sizes.width, sizes.height)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+})
+
+/**
+ * Mouse
+ */
+const mouse = new THREE.Vector2()
+
+window.addEventListener('mousemove', (event) =>
+{
+    mouse.x = event.clientX / sizes.width * 2 - 1
+    mouse.y = - (event.clientY / sizes.height) * 2 + 1
+})
+
+window.addEventListener('click', () =>
+{
+    if(currentIntersect)
+    {
+        switch(currentIntersect.object)
+        {
+            case object1:
+                console.log('click on object 1')
+                break
+
+            case object2:
+                console.log('click on object 2')
+                break
+
+            case object3:
+                console.log('click on object 3')
+                break
+        }
+    }
+})
 
 /**
  * Camera
  */
 // Base camera
-const camera = new THREE.PerspectiveCamera(
-  75,
-  sizes.width / sizes.height,
-  0.1,
-  100
-);
-camera.position.x = 4;
-camera.position.y = 2;
-camera.position.z = 5;
-scene.add(camera);
+const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
+camera.position.z = 3
+scene.add(camera)
 
 // Controls
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
+const controls = new OrbitControls(camera, canvas)
+controls.enableDamping = true
 
 /**
  * Renderer
  */
 const renderer = new THREE.WebGLRenderer({
-  canvas: canvas,
-});
-renderer.setSize(sizes.width, sizes.height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor('#262837');
+    canvas: canvas
+})
+renderer.setSize(sizes.width, sizes.height)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
-// shadows
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/**
+ * Lights
+ */
+// Ambient light
+const ambientLight = new THREE.AmbientLight('#ffffff', 0.9)
+scene.add(ambientLight)
 
-moonLight.castShadow = true;
-doorLight.castShadow = true;
-ghost1.castShadow = true;
-ghost2.castShadow = true;
-ghost3.castShadow = true;
+// Directional light
+const directionalLight = new THREE.DirectionalLight('#ffffff', 2.1)
+directionalLight.position.set(1, 2, 3)
+scene.add(directionalLight)
 
-walls.castShadow = true;
-bush1.castShadow = true;
-bush2.castShadow = true;
-bush3.castShadow = true;
-bush4.castShadow = true;
+/**
+ * Model
+ */
+const gltfLoader = new GLTFLoader()
 
-floor.receiveShadow = true;
-
-moonLight.shadow.mapSize.width = 256;
-moonLight.shadow.mapSize.height = 256;
-moonLight.shadow.camera.far = 15;
-
-// ...
-
-doorLight.shadow.mapSize.width = 256;
-doorLight.shadow.mapSize.height = 256;
-doorLight.shadow.camera.far = 7;
-
-// ...
-
-ghost1.shadow.mapSize.width = 256;
-ghost1.shadow.mapSize.height = 256;
-ghost1.shadow.camera.far = 7;
-
-// ...
-
-ghost2.shadow.mapSize.width = 256;
-ghost2.shadow.mapSize.height = 256;
-ghost2.shadow.camera.far = 7;
-
-// ...
-
-ghost3.shadow.mapSize.width = 256;
-ghost3.shadow.mapSize.height = 256;
-ghost3.shadow.camera.far = 7;
+let model = null
+gltfLoader.load(
+    './models/Duck/glTF-Binary/Duck.glb',
+    (gltf) =>
+    {
+        model = gltf.scene
+        model.position.y = - 1.2
+        scene.add(model)
+    }
+)
 
 /**
  * Animate
  */
-const clock = new THREE.Clock();
+const clock = new THREE.Clock()
 
-const tick = () => {
-  const elapsedTime = clock.getElapsedTime();
+const tick = () =>
+{
+    const elapsedTime = clock.getElapsedTime()
 
-  // update ghosts
-  const ghostAngle = elapsedTime * 0.5;
-  ghost1.position.x = Math.cos(ghostAngle) * 4;
-  ghost1.position.z = Math.sin(ghostAngle) * 4;
-  ghost1.position.y = Math.sin(ghostAngle) * 3;
+    // Animate objects
+    object1.position.y = Math.sin(elapsedTime * 0.3) * 1.5
+    object2.position.y = Math.sin(elapsedTime * 0.8) * 1.5
+    object3.position.y = Math.sin(elapsedTime * 1.4) * 1.5
 
-  const ghost2Angle = -elapsedTime * 0.32;
-  ghost2.position.x = Math.cos(ghost2Angle) * 5;
-  ghost2.position.z = Math.sin(ghost2Angle) * 5;
-  ghost2.position.y = Math.sin(ghost2Angle) * 4 + Math.sin(elapsedTime) * 2.5;
+    // Cast a fixed ray
+    // const rayOrigin = new THREE.Vector3(- 3, 0, 0)
+    // const rayDirection = new THREE.Vector3(1, 0, 0)
+    // rayDirection.normalize()
+    
+    // raycaster.set(rayOrigin, rayDirection)
+    
+    // const objectsToTest = [object1, object2, object3]
+    // const intersects = raycaster.intersectObjects(objectsToTest)
 
-  const ghost3Angle = -elapsedTime * 0.18;
-  ghost3.position.x =
-    Math.cos(ghost3Angle) * (7 + Math.sin(elapsedTime * 0.32));
-  ghost3.position.z = Math.sin(ghost3Angle) * (7 + Math.sin(elapsedTime * 0.5));
-  ghost3.position.y = Math.sin(elapsedTime * 4) + Math.sin(elapsedTime * 2.5);
+    // for(const object of objectsToTest)
+    // {
+    //     object.material.color.set('#ff0000')
+    // }
 
-  // Update controls
-  controls.update();
+    // for(const intersect of intersects)
+    // {
+    //     intersect.object.material.color.set('#0000ff')
+    // }
 
-  // Render
-  renderer.render(scene, camera);
+    // Cast a ray from the mouse
+    // raycaster.setFromCamera(mouse, camera)
+    
+    // const objectsToTest = [object1, object2, object3]
+    // const intersects = raycaster.intersectObjects(objectsToTest)
+    
+    // for(const intersect of intersects)
+    // {
+    //     intersect.object.material.color.set('#0000ff')
+    // }
 
-  // Call tick again on the next frame
-  window.requestAnimationFrame(tick);
-};
+    // for(const object of objectsToTest)
+    // {
+    //     if(!intersects.find(intersect => intersect.object === object))
+    //     {
+    //         object.material.color.set('#ff0000')
+    //     }
+    // }
 
-tick();
+    // Cast a ray from the mouse and handle events
+    raycaster.setFromCamera(mouse, camera)
+
+    const objectsToTest = [object1, object2, object3]
+    const intersects = raycaster.intersectObjects(objectsToTest)
+    
+    if(intersects.length)
+    {
+        if(!currentIntersect)
+        {
+            console.log('mouse enter')
+        }
+
+        currentIntersect = intersects[0]
+    }
+    else
+    {
+        if(currentIntersect)
+        {
+            console.log('mouse leave')
+        }
+        
+        currentIntersect = null
+    }
+
+    // Test intersect with a model
+    if(model)
+    {
+        const modelIntersects = raycaster.intersectObject(model)
+        
+        if(modelIntersects.length)
+        {
+            model.scale.set(1.2, 1.2, 1.2)
+        }
+        else
+        {
+            model.scale.set(1, 1, 1)
+        }
+    }
+
+    // Update controls
+    controls.update()
+
+    // Render
+    renderer.render(scene, camera)
+
+    // Call tick again on the next frame
+    window.requestAnimationFrame(tick)
+}
+
+tick()
