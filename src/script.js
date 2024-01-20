@@ -1,6 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { DotScreenPass } from 'three/examples/jsm/postprocessing/DotScreenPass';
+import { GlitchPass } from 'three/examples/jsm/postprocessing/GlitchPass';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
+import { RGBShiftShader } from 'three/examples/jsm/shaders/RGBShiftShader';
+import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import GUI from 'lil-gui';
+
+// console.log(SMAAPass);
 
 /**
  * Base
@@ -14,201 +26,66 @@ const canvas = document.querySelector('canvas.webgl');
 // Scene
 const scene = new THREE.Scene();
 
-// fog
-const fog = new THREE.Fog('#262837', 1, 15);
-scene.fog = fog;
-
 /**
- * Textures
+ * Loaders
  */
+const gltfLoader = new GLTFLoader();
+const cubeTextureLoader = new THREE.CubeTextureLoader();
 const textureLoader = new THREE.TextureLoader();
 
-const doorColorTexture = textureLoader.load('/textures/door/color.jpg');
-doorColorTexture.colorSpace = THREE.SRGBColorSpace;
-
-const doorAlphaTexture = textureLoader.load('/textures/door/alpha.jpg');
-const doorAmbientOcclusionTexture = textureLoader.load(
-  '/textures/door/ambientOcclusion.jpg'
-);
-const doorHeightTexture = textureLoader.load('/textures/door/height.jpg');
-const doorNormalTexture = textureLoader.load('/textures/door/normal.jpg');
-const doorMetalnessTexture = textureLoader.load('/textures/door/metalness.jpg');
-const doorRoughnessTexture = textureLoader.load('/textures/door/roughness.jpg');
-
-const bricksColorTexture = textureLoader.load('/textures/bricks/color.jpg');
-bricksColorTexture.colorSpace = THREE.SRGBColorSpace;
-const bricksAmbientOcclusionTexture = textureLoader.load(
-  '/textures/bricks/ambientOcclusion.jpg'
-);
-const bricksNormalTexture = textureLoader.load('/textures/bricks/normal.jpg');
-const bricksRoughnessTexture = textureLoader.load(
-  '/textures/bricks/roughness.jpg'
-);
-
-const grassColorTexture = textureLoader.load('/textures/grass/color.jpg');
-grassColorTexture.colorSpace = THREE.SRGBColorSpace;
-const grassAmbientOcclusionTexture = textureLoader.load(
-  '/textures/grass/ambientOcclusion.jpg'
-);
-const grassNormalTexture = textureLoader.load('/textures/grass/normal.jpg');
-const grassRoughnessTexture = textureLoader.load(
-  '/textures/grass/roughness.jpg'
-);
-
-grassColorTexture.repeat.set(8, 8);
-grassAmbientOcclusionTexture.repeat.set(8, 8);
-grassNormalTexture.repeat.set(8, 8);
-grassRoughnessTexture.repeat.set(8, 8);
-
-grassColorTexture.wrapS = THREE.RepeatWrapping;
-grassAmbientOcclusionTexture.wrapS = THREE.RepeatWrapping;
-grassNormalTexture.wrapS = THREE.RepeatWrapping;
-grassRoughnessTexture.wrapS = THREE.RepeatWrapping;
-
-grassColorTexture.wrapT = THREE.RepeatWrapping;
-grassAmbientOcclusionTexture.wrapT = THREE.RepeatWrapping;
-grassNormalTexture.wrapT = THREE.RepeatWrapping;
-grassRoughnessTexture.wrapT = THREE.RepeatWrapping;
+/**
+ * Update all materials
+ */
+const updateAllMaterials = () => {
+  scene.traverse((child) => {
+    if (
+      child instanceof THREE.Mesh &&
+      child.material instanceof THREE.MeshStandardMaterial
+    ) {
+      child.material.envMapIntensity = 2.5;
+      child.material.needsUpdate = true;
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+};
 
 /**
- * House
+ * Environment map
  */
-const house = new THREE.Group();
-scene.add(house);
+const environmentMap = cubeTextureLoader.load([
+  '/textures/environmentMaps/0/px.jpg',
+  '/textures/environmentMaps/0/nx.jpg',
+  '/textures/environmentMaps/0/py.jpg',
+  '/textures/environmentMaps/0/ny.jpg',
+  '/textures/environmentMaps/0/pz.jpg',
+  '/textures/environmentMaps/0/nz.jpg',
+]);
 
-// walls
-const walls = new THREE.Mesh(
-  new THREE.BoxGeometry(4, 2.5, 4),
-  new THREE.MeshStandardMaterial({
-    map: bricksColorTexture,
-    aoMap: bricksAmbientOcclusionTexture,
-    normalMap: bricksNormalTexture,
-    roughnessMap: bricksRoughnessTexture,
-  })
-);
+scene.background = environmentMap;
+scene.environment = environmentMap;
 
-walls.position.y = 1.25;
+/**
+ * Models
+ */
+gltfLoader.load('/models/DamagedHelmet/glTF/DamagedHelmet.gltf', (gltf) => {
+  gltf.scene.scale.set(2, 2, 2);
+  gltf.scene.rotation.y = Math.PI * 0.5;
+  scene.add(gltf.scene);
 
-house.add(walls);
-
-// roof
-const roof = new THREE.Mesh(
-  new THREE.ConeGeometry(3.5, 1, 4),
-  new THREE.MeshStandardMaterial({ color: '#b35f45' })
-);
-
-roof.position.y = 3;
-roof.rotation.y = Math.PI * 0.25;
-
-house.add(roof);
-
-// door
-const door = new THREE.Mesh(
-  new THREE.PlaneGeometry(2.2, 2.2, 100, 100),
-  new THREE.MeshStandardMaterial({
-    map: doorColorTexture,
-    transparent: textureLoader,
-    alphaMap: doorAlphaTexture,
-    aoMap: doorAmbientOcclusionTexture,
-    displacementMap: doorHeightTexture,
-    displacementScale: 0.1,
-    normalMap: doorNormalTexture,
-    metalnessMap: doorMetalnessTexture,
-    roughnessMap: doorRoughnessTexture,
-  })
-);
-
-door.position.z = 2 + 0.01;
-door.position.y = 1;
-
-house.add(door);
-
-// bushes
-const bushGeometry = new THREE.SphereGeometry(1, 16, 16);
-const bushMaterial = new THREE.MeshStandardMaterial({ color: '#89c854' });
-const bush1 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush1.scale.set(0.5, 0.5, 0.5);
-bush1.position.set(0.8, 0.2, 2.2);
-
-const bush2 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush2.scale.set(0.25, 0.25, 0.25);
-bush2.position.set(1.4, 0.1, 2.1);
-
-const bush3 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush3.scale.set(0.4, 0.4, 0.4);
-bush3.position.set(-0.8, 0.1, 2.2);
-
-const bush4 = new THREE.Mesh(bushGeometry, bushMaterial);
-bush4.scale.set(0.15, 0.15, 0.15);
-bush4.position.set(-1, 0.05, 2.6);
-
-house.add(bush1, bush2, bush3, bush4);
-
-// graves
-const graves = new THREE.Group();
-scene.add(graves);
-
-const graveGeometery = new THREE.BoxGeometry(0.6, 0.8, 0.2);
-const graveMaterial = new THREE.MeshStandardMaterial({ color: '#b2b6b1' });
-
-for (let i = 0; i < 50; i++) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = 3 + Math.random() * 6;
-  const x = Math.sin(angle) * radius;
-  const z = Math.cos(angle) * radius;
-  const grave = new THREE.Mesh(graveGeometery, graveMaterial);
-  grave.castShadow = true;
-  grave.position.set(x, 0.4, z);
-  grave.rotation.y = (Math.random() - 0.5) * 0.4;
-  grave.rotation.z = (Math.random() - 0.5) * 0.3;
-
-  graves.add(grave);
-}
-// Floor
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(20, 20),
-  new THREE.MeshStandardMaterial({
-    map: grassColorTexture,
-    aoMap: grassAmbientOcclusionTexture,
-    normalMap: grassNormalTexture,
-    roughnessMap: grassRoughnessTexture,
-  })
-);
-floor.rotation.x = -Math.PI * 0.5;
-floor.position.y = 0;
-scene.add(floor);
+  updateAllMaterials();
+});
 
 /**
  * Lights
  */
-// Ambient light
-const ambientLight = new THREE.AmbientLight('#b9d5ff', 0.12);
-gui.add(ambientLight, 'intensity').min(0).max(1).step(0.001);
-scene.add(ambientLight);
-
-// Directional light
-const moonLight = new THREE.DirectionalLight('#b9d5ff', 0.26);
-moonLight.position.set(4, 5, -2);
-gui.add(moonLight, 'intensity').min(0).max(1).step(0.001);
-gui.add(moonLight.position, 'x').min(-5).max(5).step(0.001);
-gui.add(moonLight.position, 'y').min(-5).max(5).step(0.001);
-gui.add(moonLight.position, 'z').min(-5).max(5).step(0.001);
-scene.add(moonLight);
-
-// door light
-const doorLight = new THREE.PointLight('#ff7d46', 3, 7);
-doorLight.position.set(0, 2.2, 2.7);
-house.add(doorLight);
-
-// ghosts
-const ghost1 = new THREE.PointLight('#ff00ff', 6, 3);
-scene.add(ghost1);
-
-const ghost2 = new THREE.PointLight('#00ffff', 6, 3);
-scene.add(ghost2);
-
-const ghost3 = new THREE.PointLight('#ffff00', 6, 3);
-scene.add(ghost3);
+const directionalLight = new THREE.DirectionalLight('#ffffff', 3);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.set(1024, 1024);
+directionalLight.shadow.camera.far = 15;
+directionalLight.shadow.normalBias = 0.05;
+directionalLight.position.set(0.25, 3, -2.25);
+scene.add(directionalLight);
 
 /**
  * Sizes
@@ -242,9 +119,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.x = 4;
-camera.position.y = 2;
-camera.position.z = 5;
+camera.position.set(4, 1, -4);
 scene.add(camera);
 
 // Controls
@@ -256,56 +131,127 @@ controls.enableDamping = true;
  */
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
+  antialias: true,
 });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMappingExposure = 1.5;
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor('#262837');
 
-// shadows
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/**
+ * Post-Processing
+ */
+const renderTarget = new THREE.WebGLRenderTarget(800, 600, {
+  samples: renderer.getPixelRatio() === 1 ? 2 : 0,
+});
 
-moonLight.castShadow = true;
-doorLight.castShadow = true;
-ghost1.castShadow = true;
-ghost2.castShadow = true;
-ghost3.castShadow = true;
+const effectComposer = new EffectComposer(renderer, renderTarget);
+effectComposer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+effectComposer.setSize(sizes.width, sizes.height);
 
-walls.castShadow = true;
-bush1.castShadow = true;
-bush2.castShadow = true;
-bush3.castShadow = true;
-bush4.castShadow = true;
+const renderPass = new RenderPass(scene, camera);
+effectComposer.addPass(renderPass);
 
-floor.receiveShadow = true;
+const dotScreenPass = new DotScreenPass();
+dotScreenPass.enabled = false;
+effectComposer.addPass(dotScreenPass);
 
-moonLight.shadow.mapSize.width = 256;
-moonLight.shadow.mapSize.height = 256;
-moonLight.shadow.camera.far = 15;
+const glitchPass = new GlitchPass();
+glitchPass.goWild = false;
+glitchPass.enabled = false;
+effectComposer.addPass(glitchPass);
 
-// ...
+const rgbShiftPass = new ShaderPass(RGBShiftShader);
+rgbShiftPass.enabled = false;
+effectComposer.addPass(rgbShiftPass);
 
-doorLight.shadow.mapSize.width = 256;
-doorLight.shadow.mapSize.height = 256;
-doorLight.shadow.camera.far = 7;
+const unrealBloomPass = new UnrealBloomPass();
+unrealBloomPass.strength = 0.3;
+unrealBloomPass.radius = 1;
+unrealBloomPass.threshold = 0.6;
+effectComposer.addPass(unrealBloomPass);
 
-// ...
+gui.add(unrealBloomPass, 'enabled');
+gui.add(unrealBloomPass, 'strength').min(0).max(2).step(0.001);
+gui.add(unrealBloomPass, 'radius').min(0).max(2).step(0.001);
+gui.add(unrealBloomPass, 'threshold').min(0).max(1).step(0.001);
 
-ghost1.shadow.mapSize.width = 256;
-ghost1.shadow.mapSize.height = 256;
-ghost1.shadow.camera.far = 7;
+// Tint Shader
 
-// ...
+const gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
+gammaCorrectionPass.enabled = true;
+effectComposer.addPass(gammaCorrectionPass);
 
-ghost2.shadow.mapSize.width = 256;
-ghost2.shadow.mapSize.height = 256;
-ghost2.shadow.camera.far = 7;
+if (renderer.getPixelRatio() === 1 && !renderer.capabilities) {
+  const smaaPass = new SMAAPass();
+  effectComposer.addPass(smaaPass);
+}
 
-// ...
+const DisplacementShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uNormalMap: { value: null },
+  },
+  vertexShader: `
+        varying vec2 vUv;
 
-ghost3.shadow.mapSize.width = 256;
-ghost3.shadow.mapSize.height = 256;
-ghost3.shadow.camera.far = 7;
+        void main()
+        {
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+            vUv = uv;
+        }
+    `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform sampler2D uNormalMap;
+
+    varying vec2 vUv;
+
+    void main()
+    {
+        vec3 normalColor = texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0;
+        vec2 newUv = vUv + normalColor.xy * 0.1;
+        vec4 color = texture2D(tDiffuse, newUv);
+
+        vec3 lightDirection = normalize(vec3(- 1.0, 1.0, 0.0));
+        float lightness = clamp(dot(normalColor, lightDirection), 0.0, 1.0);
+        color.rgb += lightness * 2.0;
+
+        gl_FragColor = color;
+    }
+    `,
+};
+
+const displacementPass = new ShaderPass(DisplacementShader);
+// displacementPass.material.uniforms.uTime.value = 0;
+displacementPass.material.uniforms.uNormalMap.value = textureLoader.load(
+  '/textures/interfaceNormalMap.png'
+);
+effectComposer.addPass(displacementPass);
+
+// gui
+//   .add(tintPass.material.uniforms.uTint.value, 'x')
+//   .min(-1)
+//   .max(1)
+//   .step(0.001)
+//   .name('red');
+// gui
+//   .add(tintPass.material.uniforms.uTint.value, 'y')
+//   .min(-1)
+//   .max(1)
+//   .step(0.001)
+//   .name('green');
+// gui
+//   .add(tintPass.material.uniforms.uTint.value, 'z')
+//   .min(-1)
+//   .max(1)
+//   .step(0.001)
+//   .name('blue');
 
 /**
  * Animate
@@ -315,28 +261,17 @@ const clock = new THREE.Clock();
 const tick = () => {
   const elapsedTime = clock.getElapsedTime();
 
-  // update ghosts
-  const ghostAngle = elapsedTime * 0.5;
-  ghost1.position.x = Math.cos(ghostAngle) * 4;
-  ghost1.position.z = Math.sin(ghostAngle) * 4;
-  ghost1.position.y = Math.sin(ghostAngle) * 3;
-
-  const ghost2Angle = -elapsedTime * 0.32;
-  ghost2.position.x = Math.cos(ghost2Angle) * 5;
-  ghost2.position.z = Math.sin(ghost2Angle) * 5;
-  ghost2.position.y = Math.sin(ghost2Angle) * 4 + Math.sin(elapsedTime) * 2.5;
-
-  const ghost3Angle = -elapsedTime * 0.18;
-  ghost3.position.x =
-    Math.cos(ghost3Angle) * (7 + Math.sin(elapsedTime * 0.32));
-  ghost3.position.z = Math.sin(ghost3Angle) * (7 + Math.sin(elapsedTime * 0.5));
-  ghost3.position.y = Math.sin(elapsedTime * 4) + Math.sin(elapsedTime * 2.5);
+  // Update passes
+  //   displacementPass.material.uniforms.uTime.value = elapsedTime;
 
   // Update controls
   controls.update();
 
   // Render
-  renderer.render(scene, camera);
+  //   renderer.render(scene, camera);
+  effectComposer.render();
+  effectComposer.setSize(sizes.width, sizes.height);
+  effectComposer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   // Call tick again on the next frame
   window.requestAnimationFrame(tick);
